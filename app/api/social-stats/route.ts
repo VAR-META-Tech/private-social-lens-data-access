@@ -1,43 +1,23 @@
-import { list } from "@vercel/blob";
+import { promises as fs } from 'fs';
+import path from 'path';
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    // Try to find blob using list first
+    // Get the path to the social-stats.json file
+    const filePath = path.join(process.cwd(), 'social-stats.json');
+    
     try {
-      const { blobs } = await list();
-      const socialStatsBlob = blobs.find(blob => 
-        blob.pathname.endsWith('social-stats.json')
-      );
+      // Read the file
+      const data = await fs.readFile(filePath, 'utf8');
+      const jsonData = JSON.parse(data);
+      return NextResponse.json(jsonData);
+    } catch (readError) {
+      console.error("Error reading social-stats.json:", readError);
       
-      if (socialStatsBlob) {
-        const response = await fetch(socialStatsBlob.url);
-        if (response.ok) {
-          const data = await response.json();
-          return NextResponse.json(data);
-        }
-      }
-    } catch (listError) {
-      console.log("Could not list blobs, trying direct access", listError);
-      // Continue to fallback methods if list() fails
+      // Return empty array if file doesn't exist
+      return NextResponse.json([]);
     }
-
-    // Fallback to direct URL if configured
-    const blobUrl = process.env.SOCIAL_STATS_BLOB_URL;
-    if (blobUrl) {
-      const response = await fetch(blobUrl);
-      if (response.ok) {
-        const data = await response.json();
-        return NextResponse.json(data);
-      }
-    }
-
-    // If all methods failed, return error
-    console.error("Failed to retrieve social stats data from Vercel Blob");
-    return NextResponse.json(
-      { error: "Failed to retrieve social stats data" },
-      { status: 500 }
-    );
   } catch (error) {
     console.error("Error in social-stats API endpoint:", error);
     return NextResponse.json(

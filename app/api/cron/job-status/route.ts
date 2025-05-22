@@ -7,7 +7,8 @@ import {
   JsonRpcProvider,
   LogDescription,
 } from "ethers";
-import { put } from "@vercel/blob";
+import { promises as fs } from 'fs';
+import path from 'path';
 import { NextResponse } from "next/server";
 
 // --- Configuration ---
@@ -16,7 +17,7 @@ const PRIVATE_KEY = process.env.APP_WALLET_PRIVATE_KEY;
 const RPC_URL = process.env.RPC_URL || "https://rpc.moksha.vana.org";
 const APP_API_SERVER_URL =
   process.env.APP_API_SERVER_URL ||
-  "https://21618d9c4b70b41849aaf75b8bf49277ad9212db-80.dstack-prod5.phala.network";
+  "https://efde1321d4cfdf13190a75edc28d757821b99cb5-80.dstack-prod5.phala.network";
 const COMPUTE_ENGINE_ADDRESS =
   process.env.COMPUTE_ENGINE_ADDRESS ||
   "0xb2BFe33FA420c45F1Cf1287542ad81ae935447bd";
@@ -244,6 +245,9 @@ const submitJobToApi = async (jobId: number): Promise<JobStatusResponse> => {
     },
   };
 
+  console.log("jobIdSignature", jobIdSignature);
+  console.log("querySignature", querySignature);
+
   const headers = {
     "Content-Type": "application/json",
     "x-job-id-signature": jobIdSignature,
@@ -333,6 +337,7 @@ const pollJobStatus = async (
         console.log(
           `Job ${jobId} reached terminal status: ${status}. Stopping polling.`
         );
+        console.log("lastStatusResult", lastStatusResult);
         return lastStatusResult; // Job finished
       }
     } catch (error) {
@@ -504,11 +509,11 @@ const transformToUserFormat = (rawData: unknown[]): User[] => {
 
 // --- Main API Route Handler (Cron Job Entry Point) ---
 export async function GET(req: Request) {
-  if (
-    req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // if (
+  //   req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`
+  // ) {
+  //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // }
 
   console.log("Cron job started: Submitting and monitoring compute job...");
   let jobId: number | undefined;
@@ -568,21 +573,12 @@ export async function GET(req: Request) {
             ? transformToUserFormat(artifactData)
             : [];
 
-          // Save the transformed data to Vercel Blob
-          const { url } = await put(
-            "social-stats.json",
-            JSON.stringify(transformedData, null, 2),
-            {
-              access: "public",
-              addRandomSuffix: false,
-            }
-          );
+          // Save the transformed data to local file
+          const filePath = path.join(process.cwd(), 'social-stats.json');
+          await fs.writeFile(filePath, JSON.stringify(transformedData, null, 2), 'utf8');
 
           console.log(
-            `Saved transformed artifact data to Vercel Blob at: ${url}`
-          );
-          console.log(
-            `IMPORTANT: Add this URL to your .env.local as NEXT_PUBLIC_SOCIAL_STATS_BLOB_URL=${url}`
+            `Saved transformed artifact data to local file at: ${filePath}`
           );
 
           // Return success with status and artifact data
@@ -591,7 +587,7 @@ export async function GET(req: Request) {
             jobId,
             statusResult: finalStatusResult,
             artifactData: transformedData,
-            blobUrl: url,
+            filePath,
           });
         } catch (artifactError) {
           console.error(

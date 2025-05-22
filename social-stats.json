@@ -1,0 +1,53 @@
+[
+  {
+    "userId": "user1",
+    "email": "user1@example.com",
+    "timestamp": 1641034800,
+    "profile": {
+      "name": "User One",
+      "locale": "en-US"
+    },
+    "storage": {
+      "percentUsed": 15
+    },
+    "metadata": {
+      "source": "web",
+      "collectionDate": "2023-01-01",
+      "dataType": "profile"
+    }
+  },
+  {
+    "userId": "user2",
+    "email": "user2@example.com",
+    "timestamp": 1641121200,
+    "profile": {
+      "name": "User Two",
+      "locale": "en-GB"
+    },
+    "storage": {
+      "percentUsed": 32
+    },
+    "metadata": {
+      "source": "mobile",
+      "collectionDate": "2023-01-02",
+      "dataType": "profile"
+    }
+  },
+  {
+    "userId": "user3",
+    "email": "user3@example.com",
+    "timestamp": 1641207600,
+    "profile": {
+      "name": "User Three",
+      "locale": "fr-FR"
+    },
+    "storage": {
+      "percentUsed": 5
+    },
+    "metadata": {
+      "source": "api",
+      "collectionDate": "2023-01-03",
+      "dataType": "profile"
+    }
+  }
+] 
