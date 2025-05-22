@@ -103,6 +103,12 @@ function isJobRegisteredEvent(
   return event?.name === "JobRegistered";
 }
 
+function isTeeAssignmentSucceededEvent(
+  event: LogDescription | null | undefined
+): event is LogDescription & { name: "TeeAssignmentSucceeded" } {
+  return event?.name === "TeeAssignmentSucceeded";
+}
+
 // --- Initialization ---
 if (!PRIVATE_KEY) {
   // Fatal error if private key is missing
@@ -142,7 +148,7 @@ const signMessage = async (message: string): Promise<string> => {
  * @returns The job ID obtained from the contract event.
  * @throws If the contract interaction or event parsing fails.
  */
-const submitJobToContract = async (): Promise<number> => {
+const submitJobToContract = async (): Promise<{ jobId: number, teePoolAddress: string, teeAddress: string }> => {
   const abi = getAbi("ComputeEngineProxy");
   const contract = new Contract(COMPUTE_ENGINE_ADDRESS, abi, wallet);
   const fundingAmountWei = ethers.parseEther(JOB_FUNDING_AMOUNT_ETH);
@@ -214,7 +220,33 @@ const submitJobToContract = async (): Promise<number> => {
     // Extract and return the jobId
     const jobId = Number(jobRegisteredEvent.args[0]); // Convert BigInt to number
     console.log(`Successfully registered job ID with contract: ${jobId}`);
-    return jobId;
+
+    // Extract and return the teeAssignmentSucceededEvent
+    let teeAssignmentSucceededEvent: LogDescription | undefined;
+    if (receipt.logs) {
+      for (const log of receipt.logs) {
+        const parsedLog = contract.interface.parseLog(log as ethers.Log);
+        if (isTeeAssignmentSucceededEvent(parsedLog)) {
+          teeAssignmentSucceededEvent = parsedLog;
+          break; // Found the event, no need to check further logs
+        }
+      }
+    }
+
+    if (!teeAssignmentSucceededEvent) {
+      console.error(
+        "TeeAssignmentSucceeded event not found or jobId is invalid in transaction receipt:",
+        receipt
+      );
+      throw new Error("Tee assignment failed: Could not find valid TeeAssignmentSucceeded event");
+    }
+
+    const teePoolAddress = teeAssignmentSucceededEvent.args[1];
+    console.log(`Tee pool address: ${teePoolAddress}`);
+    const teeAddress = teeAssignmentSucceededEvent.args[2];
+    console.log(`Tee address: ${teeAddress}`);
+
+    return { jobId, teePoolAddress, teeAddress };   
   } catch (error) {
     console.error("Error submitting job to contract:", error);
     // More specific error handling could be added here (e.g., insufficient funds)
@@ -232,7 +264,7 @@ const submitJobToContract = async (): Promise<number> => {
  * @returns The API server's response data, expected to include a run_id.
  * @throws If the API request fails or times out.
  */
-const submitJobToApi = async (jobId: number): Promise<JobStatusResponse> => {
+const submitJobToApi = async (jobId: number, teeUrl: string): Promise<JobStatusResponse> => {
   const jobIdStr = jobId.toString();
   const jobIdSignature = await signMessage(jobIdStr);
   const querySignature = await signMessage(SQL_QUERY);
@@ -253,7 +285,7 @@ const submitJobToApi = async (jobId: number): Promise<JobStatusResponse> => {
     "x-job-id-signature": jobIdSignature,
   };
 
-  const url = `${APP_API_SERVER_URL}/job/${jobId}`;
+  const url = `${teeUrl}/job/${jobId}`;
   console.log(`Submitting job details to API server: POST ${url}`);
   console.log(
     ` - Request body (partial): ${JSON.stringify(jobRequest.input).substring(
@@ -507,6 +539,13 @@ const transformToUserFormat = (rawData: unknown[]): User[] => {
   });
 };
 
+const getTeeUrl = async (teePoolAddress: string, teeAddress: string): Promise<string> => {
+  const abi = getAbi("TeePool");
+  const teePoolContract = new Contract(teePoolAddress, abi, wallet);
+  const teeInfo = await teePoolContract.tees(teeAddress);
+  return teeInfo.url;
+};
+
 // --- Main API Route Handler (Cron Job Entry Point) ---
 export async function GET(req: Request) {
   // if (
@@ -520,11 +559,14 @@ export async function GET(req: Request) {
 
   try {
     // === Step 1: Submit job to the blockchain ===
-    jobId = await submitJobToContract();
+    const { jobId, teePoolAddress, teeAddress } = await submitJobToContract();
     console.log(`Blockchain job submission successful. Job ID: ${jobId}`);
 
+    const teeUrl = await getTeeUrl(teePoolAddress, teeAddress);
+    console.log(`Tee URL: ${teeUrl}`);
+
     // === Step 2: Submit job details to the ===
-    const apiSubmissionResult = await submitJobToApi(jobId);
+    const apiSubmissionResult = await submitJobToApi(jobId, teeUrl);
     console.log(
       `API job submission successful. Run ID: ${
         apiSubmissionResult?.run_id || "N/A"

@@ -1,7 +1,9 @@
 import { ComputeEngineImplementationAbi } from "./ComputeEngineImplementation";
+import { TeePoolAbi } from "./TeePool";
 
 const contractAbis = {
   ComputeEngineProxy: ComputeEngineImplementationAbi,
+  TeePool: TeePoolAbi,
 } as const;
 
 export type ContractAbis = typeof contractAbis;
