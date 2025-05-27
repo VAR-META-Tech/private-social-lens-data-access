@@ -33,21 +33,7 @@ const REFINER_ID = process.env.REFINER_ID
   ? parseInt(process.env.REFINER_ID)
   : 1;
 
-const SQL_QUERY = `
-SELECT
-  u.user_id AS userId,
-  u.email,
-  CAST(strftime('%s', u.created_at) AS INTEGER) AS timestamp,
-  u.name,
-  u.locale,
-  sm.percent_used AS percentUsed,
-  a.source,
-  a.collection_date AS collectionDate,
-  a.data_type AS dataType
-FROM users u
-LEFT JOIN auth_sources a ON u.user_id = a.user_id
-LEFT JOIN storage_metrics sm ON u.user_id = sm.user_id
-`;
+const SQL_QUERY = `SELECT \"UserID\" FROM users LIMIT 1`;
 
 // --- Constants ---
 const COMPLETED_JOB_STATUSES = new Set([
@@ -287,12 +273,8 @@ const submitJobToApi = async (jobId: number, teeUrl: string): Promise<JobStatusR
 
   const url = `${teeUrl}/job/${jobId}`;
   console.log(`Submitting job details to API server: POST ${url}`);
-  console.log(
-    ` - Request body (partial): ${JSON.stringify(jobRequest.input).substring(
-      0,
-      100
-    )}...`
-  );
+  console.log("headers", headers);
+  console.log(` - Request body (partial): ${JSON.stringify(jobRequest.input)}`);
 
   try {
     const response = await axios.post<JobStatusResponse>(url, jobRequest, {
